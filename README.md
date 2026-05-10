@@ -65,6 +65,14 @@ http://localhost:8000/docs
 http://localhost:8000/api/v1/tutors/tutor1/available-times
 ```
 
+조건을 넣어 가능한 강사를 검색하는 API는 아래처럼 확인합니다.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tutors/available-search ^
+  -H "Content-Type: application/json" ^
+  -d "{\"days\":[0,2,4],\"startTime\":\"13:00\",\"durationMinutes\":23}"
+```
+
 8001 포트로 실행한 경우:
 
 ```text

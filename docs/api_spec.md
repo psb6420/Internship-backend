@@ -57,6 +57,92 @@
 - Python `datetime.now().weekday()` 기준과 맞춰 `0=월, 1=화, 2=수, 3=목, 4=금`으로 사용합니다.
 - `dayName`은 DB 저장값이 아니라 사용자가 이해하기 쉽도록 FastAPI에서 변환해 내려주는 표시용 값입니다.
 
+## 조건 기반 가능 강사 검색 API
+
+- 기능: 요일, 시작시간, 학습시간을 기준으로 가능한 강사 목록 조회
+- Method: `POST`
+- URL: `/api/v1/tutors/available-search`
+- 인증: 없음
+
+### Request Body
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| days | number[] | Y | 요일 목록. 0=월, 1=화, 2=수, 3=목, 4=금 |
+| startTime | string | Y | 수업 시작시간. `HH:MM` 형식, 5분 단위 |
+| durationMinutes | number | Y | 학습시간. 1분 이상 정수 |
+
+```json
+{
+  "days": [0, 2, 4],
+  "startTime": "13:00",
+  "durationMinutes": 23
+}
+```
+
+### Response 200
+
+조건에 맞는 강사가 있는 경우
+
+```json
+{
+  "days": [0, 2, 4],
+  "startTime": "13:00",
+  "requestedEndTime": "13:23",
+  "searchEndTime": "13:25",
+  "durationMinutes": 23,
+  "availableTutors": [
+    {
+      "tutorId": "tutor1",
+      "tutorName": "강사1",
+      "availableDays": [
+        {
+          "dayOfWeek": 0,
+          "dayName": "월"
+        },
+        {
+          "dayOfWeek": 2,
+          "dayName": "수"
+        },
+        {
+          "dayOfWeek": 4,
+          "dayName": "금"
+        }
+      ]
+    }
+  ]
+}
+```
+
+조건은 정상이나 가능한 강사가 없는 경우
+
+```json
+{
+  "days": [1, 3],
+  "startTime": "13:15",
+  "requestedEndTime": "13:35",
+  "searchEndTime": "13:35",
+  "durationMinutes": 20,
+  "availableTutors": []
+}
+```
+
+### Response 400
+
+검색 조건이 잘못된 경우
+
+```json
+{
+  "detail": "시작시간은 5분 단위로 입력해 주세요."
+}
+```
+
+### 검색 기준
+
+- 요청한 모든 요일에 해당 시간만큼 가능한 강사만 반환합니다.
+- DB는 5분 단위 슬롯으로 저장되어 있으므로 `durationMinutes`가 5분 단위로 나누어떨어지지 않으면 다음 5분 단위까지 올림 처리합니다.
+- 예를 들어 `13:00` 시작, `23분` 수업이면 실제 종료시각은 `13:23`이지만, DB 검색은 `13:25`까지 가능한지 확인합니다.
+
 ## Swagger 확인
 
 FastAPI 실행 후 아래 주소에서 Swagger 문서를 확인할 수 있습니다.
