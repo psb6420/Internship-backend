@@ -4,11 +4,11 @@ from pydantic import BaseModel
 from app.db import get_connection
 
 DAY_NAMES = {
-    1: '월',
-    2: '화',
-    3: '수',
-    4: '목',
-    5: '금',
+    0: '월',
+    1: '화',
+    2: '수',
+    3: '목',
+    4: '금',
 }
 
 app = FastAPI(

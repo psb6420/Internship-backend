@@ -24,7 +24,7 @@
   "tutorName": "강사1",
   "availableTimes": [
     {
-      "dayOfWeek": 1,
+      "dayOfWeek": 0,
       "dayName": "월",
       "slots": [
         {
@@ -50,6 +50,12 @@
   "detail": "강사 가능시간 데이터가 없습니다."
 }
 ```
+
+## 요일 표현 기준
+
+- `dayOfWeek`는 DB에 저장되는 실제 요일 값입니다.
+- Python `datetime.now().weekday()` 기준과 맞춰 `0=월, 1=화, 2=수, 3=목, 4=금`으로 사용합니다.
+- `dayName`은 DB 저장값이 아니라 사용자가 이해하기 쉽도록 FastAPI에서 변환해 내려주는 표시용 값입니다.
 
 ## Swagger 확인
 

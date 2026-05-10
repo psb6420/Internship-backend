@@ -11,6 +11,7 @@ backend/
     main.py
   docs/
     api_spec.md
+    feedback_response.md
     table_definition.md
     tutor_available_time_sample.csv
   sql/

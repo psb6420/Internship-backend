@@ -24,11 +24,11 @@ tutors AS (
   SELECT 10, 'tutor10', '강사10'
 ),
 days AS (
-  SELECT 1 AS dayOfWeek UNION ALL
+  SELECT 0 AS dayOfWeek UNION ALL
+  SELECT 1 UNION ALL
   SELECT 2 UNION ALL
   SELECT 3 UNION ALL
-  SELECT 4 UNION ALL
-  SELECT 5
+  SELECT 4
 ),
 slots AS (
   SELECT TIME('13:00:00') AS slotStartTime
@@ -50,27 +50,27 @@ CROSS JOIN slots s
 WHERE
   (
     t.tutorNo IN (1, 2)
-    AND d.dayOfWeek IN (1, 3, 5)
+    AND d.dayOfWeek IN (0, 2, 4)
     AND s.slotStartTime BETWEEN TIME('13:00:00') AND TIME('16:55:00')
   )
   OR (
     t.tutorNo IN (3, 4)
-    AND d.dayOfWeek IN (2, 4)
+    AND d.dayOfWeek IN (1, 3)
     AND s.slotStartTime BETWEEN TIME('14:00:00') AND TIME('18:55:00')
   )
   OR (
     t.tutorNo IN (5, 6)
-    AND d.dayOfWeek BETWEEN 1 AND 5
+    AND d.dayOfWeek BETWEEN 0 AND 4
     AND s.slotStartTime BETWEEN TIME('18:00:00') AND TIME('21:55:00')
   )
   OR (
     t.tutorNo IN (7, 8)
-    AND d.dayOfWeek IN (1, 2, 3, 4)
+    AND d.dayOfWeek IN (0, 1, 2, 3)
     AND s.slotStartTime BETWEEN TIME('19:00:00') AND TIME('22:55:00')
   )
   OR (
     t.tutorNo IN (9, 10)
-    AND d.dayOfWeek BETWEEN 1 AND 5
+    AND d.dayOfWeek BETWEEN 0 AND 4
     AND s.slotStartTime BETWEEN TIME('15:00:00') AND TIME('17:55:00')
   )
 ORDER BY t.tutorNo, d.dayOfWeek, s.slotStartTime;

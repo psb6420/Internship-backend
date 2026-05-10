@@ -9,8 +9,8 @@ DROP TABLE IF EXISTS TBL_TUTOR_AVAILABLE_TIME;
 CREATE TABLE TBL_TUTOR_AVAILABLE_TIME (
   availabilitySeq INT NOT NULL AUTO_INCREMENT COMMENT '강사 가능시간 고유값',
   tutorId VARCHAR(20) NOT NULL COMMENT '강사 아이디',
-  tutorName NVARCHAR(50) NOT NULL COMMENT '강사명',
-  dayOfWeek TINYINT NOT NULL COMMENT '요일: 1=월, 2=화, 3=수, 4=목, 5=금',
+  tutorName VARCHAR(50) NOT NULL COMMENT '강사명',
+  dayOfWeek TINYINT NOT NULL COMMENT '요일: 0=월, 1=화, 2=수, 3=목, 4=금',
   slotStartTime TIME NOT NULL COMMENT '가능 시작 시간',
   slotEndTime TIME NOT NULL COMMENT '가능 종료 시간',
   display CHAR(1) NOT NULL DEFAULT '1' COMMENT '사용 여부: 1=사용, 0=미사용',
