@@ -13,7 +13,7 @@ DAY_NAMES = {
 
 app = FastAPI(
     title='Tutor Available Time API',
-    description='2026 더존ICT그룹 인턴쉽 3주차 강사 가능시간 조회 API',
+    description='2026 더존ICT그룹 인턴쉽 백엔드 강사 가능시간 조회 API',
     version='1.0.0',
 )
 

@@ -1,4 +1,4 @@
-# 3주차 실습직무 - 강사 가능시간 API
+# Internship Backend - 강사 가능시간 API
 
 Python, FastAPI, Uvicorn, MySQL을 사용하여 강사 가능시간 DB와 조회 API를 구현한 실습입니다.
 
