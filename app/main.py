@@ -1,4 +1,3 @@
-import math
 import re
 from datetime import datetime, timedelta
 
@@ -60,7 +59,6 @@ class AvailableTutorSearchResponse(BaseModel):
     days: list[int]
     startTime: str
     requestedEndTime: str
-    searchEndTime: str
     durationMinutes: int
     availableTutors: list[AvailableTutor]
 
@@ -100,13 +98,11 @@ def validate_search_request(request: AvailableTutorSearchRequest):
         raise HTTPException(status_code=400, detail='학습시간은 1분 이상으로 입력해 주세요.')
 
     requested_end_datetime = start_datetime + timedelta(minutes=request.durationMinutes)
-    required_slots = math.ceil(request.durationMinutes / 5)
-    search_end_datetime = start_datetime + timedelta(minutes=required_slots * 5)
 
-    if search_end_datetime.date() != start_datetime.date():
+    if requested_end_datetime.date() != start_datetime.date():
         raise HTTPException(status_code=400, detail='검색 종료 시간이 하루를 넘을 수 없습니다.')
 
-    return days, start_datetime, requested_end_datetime, search_end_datetime, required_slots
+    return days, start_datetime, requested_end_datetime
 
 
 @app.get(
@@ -194,30 +190,37 @@ def get_tutor_available_times(tutor_id: str):
     },
 )
 def search_available_tutors(request: AvailableTutorSearchRequest):
-    days, start_datetime, requested_end_datetime, search_end_datetime, required_slots = (
-        validate_search_request(request)
-    )
+    days, start_datetime, requested_end_datetime = validate_search_request(request)
     placeholders = ', '.join(['%s'] * len(days))
     query = f"""
         SELECT
             tutorId,
             tutorName,
             dayOfWeek,
-            COUNT(*) AS matchedSlotCount
+            SUM(
+                TIME_TO_SEC(
+                    TIMEDIFF(
+                        LEAST(slotEndTime, %s),
+                        GREATEST(slotStartTime, %s)
+                    )
+                ) / 60
+            ) AS matchedMinutes
         FROM TBL_TUTOR_AVAILABLE_TIME
         WHERE display = '1'
             AND dayOfWeek IN ({placeholders})
-            AND slotStartTime >= %s
-            AND slotEndTime <= %s
+            AND slotStartTime < %s
+            AND slotEndTime > %s
         GROUP BY tutorId, tutorName, dayOfWeek
-        HAVING matchedSlotCount >= %s
+        HAVING matchedMinutes >= %s
         ORDER BY tutorId ASC, dayOfWeek ASC
     """
     params = [
-        *days,
+        requested_end_datetime.strftime('%H:%M:%S'),
         start_datetime.strftime('%H:%M:%S'),
-        search_end_datetime.strftime('%H:%M:%S'),
-        required_slots,
+        *days,
+        requested_end_datetime.strftime('%H:%M:%S'),
+        start_datetime.strftime('%H:%M:%S'),
+        request.durationMinutes,
     ]
 
     with get_connection() as connection:
@@ -253,7 +256,6 @@ def search_available_tutors(request: AvailableTutorSearchRequest):
         'days': days,
         'startTime': start_datetime.strftime('%H:%M'),
         'requestedEndTime': requested_end_datetime.strftime('%H:%M'),
-        'searchEndTime': search_end_datetime.strftime('%H:%M'),
         'durationMinutes': request.durationMinutes,
         'availableTutors': available_tutors,
     }

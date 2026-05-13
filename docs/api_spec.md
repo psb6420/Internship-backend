@@ -89,7 +89,6 @@
   "days": [0, 2, 4],
   "startTime": "13:00",
   "requestedEndTime": "13:23",
-  "searchEndTime": "13:25",
   "durationMinutes": 23,
   "availableTutors": [
     {
@@ -121,7 +120,6 @@
   "days": [1, 3],
   "startTime": "13:15",
   "requestedEndTime": "13:35",
-  "searchEndTime": "13:35",
   "durationMinutes": 20,
   "availableTutors": []
 }
@@ -140,8 +138,8 @@
 ### 검색 기준
 
 - 요청한 모든 요일에 해당 시간만큼 가능한 강사만 반환합니다.
-- DB는 5분 단위 슬롯으로 저장되어 있으므로 `durationMinutes`가 5분 단위로 나누어떨어지지 않으면 다음 5분 단위까지 올림 처리합니다.
-- 예를 들어 `13:00` 시작, `23분` 수업이면 실제 종료시각은 `13:23`이지만, DB 검색은 `13:25`까지 가능한지 확인합니다.
+- `durationMinutes`는 5분 단위로 올림하지 않고 입력된 1분 단위 값을 그대로 사용합니다.
+- 예를 들어 `13:00` 시작, `23분` 수업이면 검색 종료 기준과 응답의 `requestedEndTime`은 `13:23`입니다.
 
 ## Swagger 확인
 
