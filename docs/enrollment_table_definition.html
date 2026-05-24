@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>수강신청 DB 테이블 정의서</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #607080;
+      --line: #d8dee6;
+      --head: #eef3f8;
+      --accent: #1b6ca8;
+      --soft: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Malgun Gothic", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1180px, calc(100vw - 48px));
+      margin: 32px auto 48px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--accent);
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p, li { font-size: 14px; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 20px 0 22px;
+    }
+    .summary div {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      padding: 12px;
+      border-radius: 6px;
+    }
+    .summary strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 18px;
+      table-layout: fixed;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      vertical-align: top;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: var(--head);
+      color: #213547;
+      font-weight: 700;
+      text-align: left;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #eef2f7;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .note {
+      border-left: 4px solid var(--accent);
+      background: #f3f8fc;
+      padding: 10px 12px;
+      color: #24384a;
+      font-size: 14px;
+    }
+    .small { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>수강신청 DB 테이블 정의서</h1>
+  <p class="small">DBMS: MySQL 8.0 / Database: <code>dozon_internship</code> / Charset: <code>utf8mb4</code></p>
+
+  <section class="summary">
+    <div><strong>필수 항목</strong>학생정보, 시작일, 횟수, 요일, 과정, 시작시간, 수업시간, 강사</div>
+    <div><strong>선택 항목</strong>일자별 수업정보까지 설계</div>
+    <div><strong>요일 기준</strong>0=월, 1=화, 2=수, 3=목, 4=금, 5=토, 6=일</div>
+    <div><strong>더미데이터</strong>학생 5명, 강사 5명, 과정 5개, 신청 5건</div>
+  </section>
+
+  <h2>전체 테이블 구성</h2>
+  <table>
+    <thead>
+      <tr><th>테이블명</th><th>한글명</th><th>설명</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>TBL_STUDENT</code></td><td>학생 기본정보</td><td>학생 아이디, 고유번호, 이름, 연락처, 이메일 저장</td></tr>
+      <tr><td><code>TBL_TUTOR</code></td><td>강사 기본정보</td><td>강사 아이디, 이름, 연락처, 이메일 저장</td></tr>
+      <tr><td><code>TBL_COURSE</code></td><td>수업과정 정보</td><td>과정 코드, 과정명, 레벨, 설명 저장</td></tr>
+      <tr><td><code>TBL_ENROLLMENT</code></td><td>수강신청 정보</td><td>학생, 과정, 강사, 시작일, 횟수, 시작시간, 수업시간 저장</td></tr>
+      <tr><td><code>TBL_ENROLLMENT_WEEKDAY</code></td><td>수강신청별 수업요일</td><td>한 신청에 여러 요일을 연결해서 저장</td></tr>
+      <tr><td><code>TBL_CLASS_SCHEDULE</code></td><td>일자별 수업정보</td><td>수강신청 기준으로 실제 수업일과 회차를 생성해 저장</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_STUDENT</h2>
+  <p>학생의 아이디와 고유번호를 중복 없이 관리한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>studentSeq</td><td>INT</td><td>N</td><td>PK</td><td>학생 고유 순번</td></tr>
+      <tr><td>studentId</td><td>VARCHAR(30)</td><td>N</td><td>UNIQUE</td><td>학생 아이디</td></tr>
+      <tr><td>studentNo</td><td>VARCHAR(20)</td><td>N</td><td>UNIQUE</td><td>학생 고유번호</td></tr>
+      <tr><td>studentName</td><td>VARCHAR(50)</td><td>N</td><td></td><td>학생명</td></tr>
+      <tr><td>studentPhone</td><td>VARCHAR(20)</td><td>Y</td><td></td><td>학생 연락처</td></tr>
+      <tr><td>studentEmail</td><td>VARCHAR(100)</td><td>Y</td><td></td><td>학생 이메일</td></tr>
+      <tr><td>display</td><td>CHAR(1)</td><td>N</td><td></td><td>사용 여부</td></tr>
+      <tr><td>regDate / modDate</td><td>DATETIME</td><td>N / Y</td><td></td><td>등록일 / 수정일</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_TUTOR</h2>
+  <p>수업 담당 강사의 기본 정보를 관리한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>tutorSeq</td><td>INT</td><td>N</td><td>PK</td><td>강사 고유 순번</td></tr>
+      <tr><td>tutorId</td><td>VARCHAR(30)</td><td>N</td><td>UNIQUE</td><td>강사 아이디</td></tr>
+      <tr><td>tutorName</td><td>VARCHAR(50)</td><td>N</td><td></td><td>강사명</td></tr>
+      <tr><td>tutorPhone</td><td>VARCHAR(20)</td><td>Y</td><td></td><td>강사 연락처</td></tr>
+      <tr><td>tutorEmail</td><td>VARCHAR(100)</td><td>Y</td><td></td><td>강사 이메일</td></tr>
+      <tr><td>display</td><td>CHAR(1)</td><td>N</td><td></td><td>사용 여부</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_COURSE</h2>
+  <p>수강신청 시 선택하는 수업과정 정보를 관리한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>courseSeq</td><td>INT</td><td>N</td><td>PK</td><td>수업과정 고유 순번</td></tr>
+      <tr><td>courseCode</td><td>VARCHAR(20)</td><td>N</td><td>UNIQUE</td><td>수업과정 코드</td></tr>
+      <tr><td>courseName</td><td>VARCHAR(100)</td><td>N</td><td></td><td>수업과정명</td></tr>
+      <tr><td>courseLevel</td><td>VARCHAR(20)</td><td>Y</td><td></td><td>과정 레벨</td></tr>
+      <tr><td>courseDescription</td><td>VARCHAR(500)</td><td>Y</td><td></td><td>과정 설명</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_ENROLLMENT</h2>
+  <p>수강신청의 핵심 정보를 저장한다. 학생, 과정, 강사는 각각 기준 테이블을 참조한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>enrollmentSeq</td><td>INT</td><td>N</td><td>PK</td><td>수강신청 고유 순번</td></tr>
+      <tr><td>enrollmentId</td><td>VARCHAR(20)</td><td>N</td><td>UNIQUE</td><td>수강신청번호</td></tr>
+      <tr><td>studentId</td><td>VARCHAR(30)</td><td>N</td><td>FK</td><td>학생 아이디</td></tr>
+      <tr><td>courseCode</td><td>VARCHAR(20)</td><td>N</td><td>FK</td><td>수업과정 코드</td></tr>
+      <tr><td>tutorId</td><td>VARCHAR(30)</td><td>N</td><td>FK</td><td>강사 아이디</td></tr>
+      <tr><td>lessonStartDate</td><td>DATE</td><td>N</td><td></td><td>수업 시작일</td></tr>
+      <tr><td>lessonCount</td><td>SMALLINT</td><td>N</td><td></td><td>수업횟수</td></tr>
+      <tr><td>lessonStartTime</td><td>TIME</td><td>N</td><td></td><td>수업 시작시간</td></tr>
+      <tr><td>lessonDurationMinutes</td><td>SMALLINT</td><td>N</td><td></td><td>수업시간(분)</td></tr>
+      <tr><td>enrollmentStatus</td><td>TINYINT</td><td>N</td><td></td><td>1=신청, 2=진행중, 3=종료, 9=취소</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_ENROLLMENT_WEEKDAY</h2>
+  <p>한 신청에 여러 요일을 연결한다. 월수금 수업은 0, 2, 4 세 건으로 저장한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>enrollmentWeekdaySeq</td><td>INT</td><td>N</td><td>PK</td><td>수강신청 요일 고유 순번</td></tr>
+      <tr><td>enrollmentSeq</td><td>INT</td><td>N</td><td>FK</td><td>수강신청 고유 순번</td></tr>
+      <tr><td>dayOfWeek</td><td>TINYINT</td><td>N</td><td></td><td>0=월, 1=화, 2=수, 3=목, 4=금, 5=토, 6=일</td></tr>
+      <tr><td>regDate</td><td>DATETIME</td><td>N</td><td></td><td>등록일</td></tr>
+    </tbody>
+  </table>
+
+  <h2>TBL_CLASS_SCHEDULE</h2>
+  <p>수강신청을 기준으로 생성되는 일자별 수업정보다. 회차, 실제 수업일, 시작/종료 시간, 수업 URL, 상태를 저장한다.</p>
+  <table>
+    <thead><tr><th>컬럼명</th><th>데이터 형식</th><th>Null</th><th>Key</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>classSeq</td><td>INT</td><td>N</td><td>PK</td><td>일자별 수업 고유 순번</td></tr>
+      <tr><td>classId</td><td>VARCHAR(30)</td><td>N</td><td>UNIQUE</td><td>일자별 수업번호</td></tr>
+      <tr><td>enrollmentSeq</td><td>INT</td><td>N</td><td>FK</td><td>수강신청 고유 순번</td></tr>
+      <tr><td>lessonRound</td><td>SMALLINT</td><td>N</td><td></td><td>수업 회차</td></tr>
+      <tr><td>classDate</td><td>DATE</td><td>N</td><td></td><td>수업일</td></tr>
+      <tr><td>dayOfWeek</td><td>TINYINT</td><td>N</td><td></td><td>수업요일</td></tr>
+      <tr><td>classStartTime</td><td>TIME</td><td>N</td><td></td><td>수업 시작시간</td></tr>
+      <tr><td>classEndTime</td><td>TIME</td><td>N</td><td></td><td>수업 종료시간</td></tr>
+      <tr><td>classDurationMinutes</td><td>SMALLINT</td><td>N</td><td></td><td>수업시간(분)</td></tr>
+      <tr><td>tutorId</td><td>VARCHAR(30)</td><td>N</td><td>FK</td><td>강사 아이디</td></tr>
+      <tr><td>classStatus</td><td>TINYINT</td><td>N</td><td></td><td>1=예정, 2=완료, 9=취소</td></tr>
+      <tr><td>classUrl</td><td>VARCHAR(200)</td><td>Y</td><td></td><td>화상수업 URL</td></tr>
+      <tr><td>classMemo</td><td>VARCHAR(500)</td><td>Y</td><td></td><td>수업 메모</td></tr>
+    </tbody>
+  </table>
+
+  <h2>설계 기준</h2>
+  <ul>
+    <li>학생, 강사, 과정은 기준 테이블로 분리해 중복 저장을 줄였다.</li>
+    <li>수강신청 본문에는 시작일, 횟수, 시작시간, 수업시간, 상태처럼 신청 자체의 조건만 저장했다.</li>
+    <li>수업요일은 문자열 하나가 아니라 별도 테이블에 숫자로 저장해 다양한 요일 조합을 처리한다.</li>
+    <li>일자별 수업정보는 수강신청의 요일과 횟수를 기준으로 자동 생성한다.</li>
+    <li>같은 강사, 같은 날짜, 같은 시작시간의 중복 배정을 방지하는 unique index를 둔다.</li>
+  </ul>
+
+  <p class="note">검증 기준: 수강신청 5건, 수업요일 12건, 일자별 수업정보 176건이 생성되어야 하며, 일자별 수업정보 건수는 수강신청의 수업횟수 합계와 같아야 한다.</p>
+</main>
+</body>
+</html>
