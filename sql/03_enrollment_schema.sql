@@ -64,6 +64,7 @@ CREATE TABLE TBL_ENROLLMENT (
   courseCode VARCHAR(20) NOT NULL COMMENT '수업과정 코드',
   tutorId VARCHAR(30) NOT NULL COMMENT '강사 아이디',
   lessonStartDate DATE NOT NULL COMMENT '수업 시작일',
+  lessonEndDate DATE NOT NULL COMMENT '수업 종료일',
   lessonCount SMALLINT NOT NULL COMMENT '수업횟수',
   lessonStartTime TIME NOT NULL COMMENT '수업 시작시간',
   lessonDurationMinutes SMALLINT NOT NULL COMMENT '수업시간(분)',
@@ -74,7 +75,7 @@ CREATE TABLE TBL_ENROLLMENT (
   PRIMARY KEY (enrollmentSeq),
   UNIQUE KEY UX_TBL_ENROLLMENT_ID (enrollmentId),
   KEY IX_TBL_ENROLLMENT_STUDENT (studentId, enrollmentStatus),
-  KEY IX_TBL_ENROLLMENT_TUTOR_TIME (tutorId, lessonStartDate, lessonStartTime),
+  KEY IX_TBL_ENROLLMENT_TUTOR_TIME (tutorId, lessonStartDate, lessonEndDate, lessonStartTime),
   KEY IX_TBL_ENROLLMENT_COURSE (courseCode),
   CONSTRAINT FK_TBL_ENROLLMENT_STUDENT
     FOREIGN KEY (studentId) REFERENCES TBL_STUDENT (studentId)
@@ -86,6 +87,7 @@ CREATE TABLE TBL_ENROLLMENT (
     FOREIGN KEY (tutorId) REFERENCES TBL_TUTOR (tutorId)
     ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT CK_TBL_ENROLLMENT_LESSON_COUNT CHECK (lessonCount > 0),
+  CONSTRAINT CK_TBL_ENROLLMENT_DATE_RANGE CHECK (lessonStartDate <= lessonEndDate),
   CONSTRAINT CK_TBL_ENROLLMENT_DURATION CHECK (lessonDurationMinutes > 0),
   CONSTRAINT CK_TBL_ENROLLMENT_STATUS CHECK (enrollmentStatus IN (1, 2, 3, 9))
 ) COMMENT='수강신청 정보';

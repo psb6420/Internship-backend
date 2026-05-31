@@ -54,7 +54,7 @@
 ## 요일 표현 기준
 
 - `dayOfWeek`는 DB에 저장되는 실제 요일 값입니다.
-- Python `datetime.now().weekday()` 기준과 맞춰 `0=월, 1=화, 2=수, 3=목, 4=금`으로 사용합니다.
+- Python `datetime.now().weekday()` 기준과 맞춰 `0=월, 1=화, 2=수, 3=목, 4=금, 5=토, 6=일`로 사용합니다.
 - `dayName`은 DB 저장값이 아니라 사용자가 이해하기 쉽도록 FastAPI에서 변환해 내려주는 표시용 값입니다.
 
 ## 조건 기반 가능 강사 검색 API
@@ -140,6 +140,147 @@
 - 요청한 모든 요일에 해당 시간만큼 가능한 강사만 반환합니다.
 - `durationMinutes`는 5분 단위로 올림하지 않고 입력된 1분 단위 값을 그대로 사용합니다.
 - 예를 들어 `13:00` 시작, `23분` 수업이면 검색 종료 기준과 응답의 `requestedEndTime`은 `13:23`입니다.
+
+## 수강신청 옵션 조회 API
+
+- 기능: 고정 학생, 과정 목록, 수업요일, 신청 가능 시작일 범위 조회
+- Method: `GET`
+- URL: `/api/v1/enrollments/options`
+- 인증: 없음
+
+### Response 200
+
+```json
+{
+  "fixedStudent": {
+    "studentId": "stu2026001",
+    "studentNo": "STU-2026-001",
+    "studentName": "김민준"
+  },
+  "courses": [
+    {
+      "courseCode": "COURSE_BASIC",
+      "courseName": "기초 회화 과정",
+      "courseLevel": "입문"
+    }
+  ],
+  "dayPatterns": [
+    {
+      "dayPatternCode": "MWF",
+      "dayPatternName": "월수금",
+      "days": [0, 2, 4],
+      "dayNames": ["월", "수", "금"]
+    }
+  ],
+  "lessonCount": 32,
+  "lessonDurationMinutes": 20,
+  "startDateMin": "2026-06-01",
+  "startDateMax": "2027-06-01"
+}
+```
+
+## 수강신청 가능시간 조회 API
+
+- 기능: 선택한 조건으로 32회 수업을 생성했을 때 신청 가능한 시간과 강사 조회
+- Method: `POST`
+- URL: `/api/v1/enrollments/available-times`
+- 인증: 없음
+
+### Request Body
+
+| 이름 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| courseCode | string | Y | 수업과정 코드 |
+| startDate | string | Y | 희망 시작일. 신청일~1년 범위 |
+| dayPatternCode | string | Y | `MWF` 또는 `TT` |
+
+```json
+{
+  "courseCode": "COURSE_BASIC",
+  "startDate": "2026-06-01",
+  "dayPatternCode": "MWF"
+}
+```
+
+### Response 200
+
+```json
+{
+  "courseCode": "COURSE_BASIC",
+  "startDate": "2026-06-01",
+  "firstClassDate": "2026-06-01",
+  "lessonEndDate": "2026-08-12",
+  "lessonCount": 32,
+  "lessonDurationMinutes": 20,
+  "dayPatternCode": "MWF",
+  "dayPatternName": "월수금",
+  "slots": [
+    {
+      "startTime": "13:25",
+      "endTime": "13:45",
+      "availableTutorCount": 2,
+      "tutors": [
+        {
+          "tutorId": "tutor1",
+          "tutorName": "강사1"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 수강신청 등록 API
+
+- 기능: 선택한 시간과 강사를 재검증한 뒤 수강신청, 수강신청 요일, 일자별 수업 32건 등록
+- Method: `POST`
+- URL: `/api/v1/enrollments`
+- 인증: 없음
+
+### Request Body
+
+```json
+{
+  "courseCode": "COURSE_BASIC",
+  "startDate": "2026-06-01",
+  "dayPatternCode": "MWF",
+  "startTime": "13:25",
+  "tutorId": "tutor1",
+  "studentRequestDesc": "2차 2주차 실습 수강신청"
+}
+```
+
+### Response 200
+
+```json
+{
+  "enrollmentId": "ENR260601014501A1B2",
+  "studentId": "stu2026001",
+  "courseCode": "COURSE_BASIC",
+  "courseName": "기초 회화 과정",
+  "tutorId": "tutor1",
+  "tutorName": "강사1",
+  "dayPatternCode": "MWF",
+  "dayPatternName": "월수금",
+  "lessonStartDate": "2026-06-01",
+  "lessonEndDate": "2026-08-12",
+  "lessonCount": 32,
+  "lessonStartTime": "13:25",
+  "lessonDurationMinutes": 20,
+  "createdClassCount": 32,
+  "schedules": []
+}
+```
+
+### Response 409
+
+조회 이후 다른 신청으로 강사가 배정되어 더 이상 신청할 수 없는 경우
+
+```json
+{
+  "detail": "선택한 시간은 더 이상 신청할 수 없습니다."
+}
+```
 
 ## Swagger 확인
 

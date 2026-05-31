@@ -1,6 +1,6 @@
-# Internship Backend - 강사 가능시간 API
+# Internship Backend - 강사 가능시간 / 수강신청 API
 
-Python, FastAPI, Uvicorn, MySQL을 사용하여 강사 가능시간 DB와 조회 API를 구현한 실습입니다.
+Python, FastAPI, Uvicorn, MySQL을 사용하여 강사 가능시간 조회와 수강신청 프로세스를 구현한 실습입니다.
 
 ## 폴더 구성
 
@@ -11,12 +11,15 @@ backend/
     main.py
   docs/
     api_spec.md
+    enrollment_available_time_query.md
     feedback_response.md
     table_definition.md
     tutor_available_time_sample.csv
   sql/
     01_schema.sql
     02_seed.sql
+    03_enrollment_schema.sql
+    04_enrollment_seed.sql
   .env.example
   requirements.txt
 ```
@@ -43,7 +46,9 @@ DB_NAME=dozon_internship
 
 ```bash
 mysql --default-character-set=utf8mb4 -u root -p -e "source sql/01_schema.sql"
+mysql --default-character-set=utf8mb4 -u root -p -e "source sql/03_enrollment_schema.sql"
 mysql --default-character-set=utf8mb4 -u root -p -e "source sql/02_seed.sql"
+mysql --default-character-set=utf8mb4 -u root -p -e "source sql/04_enrollment_seed.sql"
 ```
 
 4. FastAPI 서버를 실행합니다.
@@ -78,4 +83,12 @@ curl -X POST http://localhost:8000/api/v1/tutors/available-search ^
 ```text
 http://localhost:8001/docs
 http://localhost:8001/api/v1/tutors/tutor1/available-times
+```
+
+수강신청 화면에서 사용하는 주요 API는 아래와 같습니다.
+
+```text
+GET  /api/v1/enrollments/options
+POST /api/v1/enrollments/available-times
+POST /api/v1/enrollments
 ```

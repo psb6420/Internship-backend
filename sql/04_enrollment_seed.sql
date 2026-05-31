@@ -37,11 +37,11 @@ INSERT INTO TBL_TUTOR (
   tutorEmail,
   display
 ) VALUES
-  ('tutor01', '강사 Alice', '010-3001-4001', 'alice.tutor@example.com', '1'),
-  ('tutor02', '강사 Brian', '010-3001-4002', 'brian.tutor@example.com', '1'),
-  ('tutor03', '강사 Chloe', '010-3001-4003', 'chloe.tutor@example.com', '1'),
-  ('tutor04', '강사 Daniel', '010-3001-4004', 'daniel.tutor@example.com', '1'),
-  ('tutor05', '강사 Emily', '010-3001-4005', 'emily.tutor@example.com', '1');
+  ('tutor1', '강사1', '010-3001-4001', 'tutor1@example.com', '1'),
+  ('tutor2', '강사2', '010-3001-4002', 'tutor2@example.com', '1'),
+  ('tutor3', '강사3', '010-3001-4003', 'tutor3@example.com', '1'),
+  ('tutor4', '강사4', '010-3001-4004', 'tutor4@example.com', '1'),
+  ('tutor5', '강사5', '010-3001-4005', 'tutor5@example.com', '1');
 
 INSERT INTO TBL_COURSE (
   courseCode,
@@ -62,31 +62,33 @@ INSERT INTO TBL_ENROLLMENT (
   courseCode,
   tutorId,
   lessonStartDate,
+  lessonEndDate,
   lessonCount,
   lessonStartTime,
   lessonDurationMinutes,
   enrollmentStatus,
   studentRequestDesc
 ) VALUES
-  ('ENR2026052501', 'stu2026001', 'COURSE_BASIC', 'tutor01', '2026-06-01', 32, '19:00:00', 20, 1, '월수금 저녁 수업 희망'),
-  ('ENR2026052502', 'stu2026002', 'COURSE_BUSINESS', 'tutor02', '2026-06-02', 40, '20:00:00', 40, 1, '화목 업무 영어 중심 수업 희망'),
-  ('ENR2026052503', 'stu2026003', 'COURSE_OPIC', 'tutor03', '2026-06-01', 32, '21:00:00', 20, 1, '월수 시험 대비 수업 희망'),
-  ('ENR2026052504', 'stu2026004', 'COURSE_KIDS', 'tutor04', '2026-06-02', 40, '18:30:00', 20, 1, '화목금 주니어 수업 희망'),
-  ('ENR2026052505', 'stu2026005', 'COURSE_FREE', 'tutor05', '2026-06-03', 32, '07:30:00', 40, 1, '수금 오전 프리토킹 희망');
+  ('ENR2026060101', 'stu2026001', 'COURSE_BASIC', 'tutor1', '2026-06-01', '2026-08-12', 32, '13:00:00', 20, 1, '월수금 13시 기존 수업'),
+  ('ENR2026060102', 'stu2026002', 'COURSE_BUSINESS', 'tutor2', '2026-06-01', '2026-08-12', 32, '13:00:00', 20, 1, '월수금 13시 기존 수업'),
+  ('ENR2026060103', 'stu2026003', 'COURSE_OPIC', 'tutor3', '2026-06-02', '2026-09-17', 32, '14:00:00', 20, 1, '화목 14시 기존 수업'),
+  ('ENR2026060104', 'stu2026004', 'COURSE_KIDS', 'tutor4', '2026-06-02', '2026-09-17', 32, '14:00:00', 20, 1, '화목 14시 기존 수업'),
+  ('ENR2026060105', 'stu2026005', 'COURSE_FREE', 'tutor5', '2026-06-01', '2026-08-12', 32, '19:00:00', 20, 1, '월수금 19시 기존 수업');
 
 INSERT INTO TBL_ENROLLMENT_WEEKDAY (enrollmentSeq, dayOfWeek)
-SELECT enrollmentSeq, 0 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052501'
-UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052501'
-UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052501'
-UNION ALL SELECT enrollmentSeq, 1 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052502'
-UNION ALL SELECT enrollmentSeq, 3 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052502'
-UNION ALL SELECT enrollmentSeq, 0 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052503'
-UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052503'
-UNION ALL SELECT enrollmentSeq, 1 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052504'
-UNION ALL SELECT enrollmentSeq, 3 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052504'
-UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052504'
-UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052505'
-UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026052505';
+SELECT enrollmentSeq, 0 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060101'
+UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060101'
+UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060101'
+UNION ALL SELECT enrollmentSeq, 0 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060102'
+UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060102'
+UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060102'
+UNION ALL SELECT enrollmentSeq, 1 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060103'
+UNION ALL SELECT enrollmentSeq, 3 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060103'
+UNION ALL SELECT enrollmentSeq, 1 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060104'
+UNION ALL SELECT enrollmentSeq, 3 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060104'
+UNION ALL SELECT enrollmentSeq, 0 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060105'
+UNION ALL SELECT enrollmentSeq, 2 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060105'
+UNION ALL SELECT enrollmentSeq, 4 FROM TBL_ENROLLMENT WHERE enrollmentId = 'ENR2026060105';
 
 INSERT INTO TBL_CLASS_SCHEDULE (
   classId,
@@ -170,6 +172,7 @@ SELECT
   s.studentName,
   c.courseName,
   e.lessonStartDate,
+  e.lessonEndDate,
   e.lessonCount,
   (
     SELECT GROUP_CONCAT(
@@ -217,7 +220,7 @@ SELECT
 FROM TBL_CLASS_SCHEDULE cs
 JOIN TBL_ENROLLMENT e ON e.enrollmentSeq = cs.enrollmentSeq
 JOIN TBL_TUTOR t ON t.tutorId = cs.tutorId
-WHERE e.enrollmentId = 'ENR2026052501'
+WHERE e.enrollmentId = 'ENR2026060101'
 ORDER BY cs.lessonRound
 LIMIT 10;
 
@@ -230,6 +233,17 @@ SELECT
       THEN 'OK'
     ELSE 'FAIL'
   END AS result;
+
+SELECT
+  'lesson_end_date_matches_last_class_date' AS checkName,
+  COUNT(*) AS mismatchCount
+FROM TBL_ENROLLMENT e
+JOIN (
+  SELECT enrollmentSeq, MAX(classDate) AS lastClassDate
+  FROM TBL_CLASS_SCHEDULE
+  GROUP BY enrollmentSeq
+) lc ON lc.enrollmentSeq = e.enrollmentSeq
+WHERE e.lessonEndDate <> lc.lastClassDate;
 
 SELECT
   'weekday_mismatch_count' AS checkName,
