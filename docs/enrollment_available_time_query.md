@@ -4,6 +4,40 @@
 
 수강신청 화면에서 과정, 수업시작일, 수업요일을 선택하면 해당 조건으로 32회 수업을 생성했을 때 배정 가능한 강사와 시간을 조회한다.
 
+## 2차 3주차 피드백 반영
+
+- 가능시간 쿼리 실행 전에 서버 언어인 파이썬에서 실제 수업일 32개를 먼저 계산한다.
+- 파이썬에서 계산한 첫 수업일과 종료일을 쿼리 파라미터로 전달한다.
+- 기존 쿼리의 `WITH RECURSIVE day_numbers`, `target_classes`, `ROW_NUMBER()`를 제거했다.
+- 기존 수업 충돌 검사는 `TBL_CLASS_SCHEDULE.classDate BETWEEN :firstClassDate AND :lessonEndDate` 범위 조건으로 처리한다.
+- 선택 요일은 `cs.dayOfWeek IN (:days)`로 함께 제한해 수업 기간 안의 실제 대상 요일만 검사한다.
+
+## 서버 종료일 계산 소스
+
+```python
+class_dates = build_class_dates(request.startDate, pattern['days'], FIXED_LESSON_COUNT)
+
+rows = fetch_available_enrollment_rows(
+    cursor,
+    class_dates[0],
+    class_dates[-1],
+    pattern['days'],
+)
+```
+
+```python
+def build_class_dates(start_date: date, days: list[int], lesson_count: int):
+    class_dates = []
+    current_date = start_date
+
+    while len(class_dates) < lesson_count:
+        if current_date.weekday() in days:
+            class_dates.append(current_date)
+        current_date += timedelta(days=1)
+
+    return class_dates
+```
+
 ## 조회 기준
 
 - 학생은 `stu2026001`로 고정한다.
@@ -17,40 +51,19 @@
 ## 핵심 쿼리
 
 ```sql
-WITH RECURSIVE day_numbers AS (
-    SELECT 0 AS dayOffset
-    UNION ALL
-    SELECT dayOffset + 1
-    FROM day_numbers
-    WHERE dayOffset < 370
-),
-target_classes AS (
-    SELECT classDate, dayOfWeek, lessonRound
-    FROM (
-        SELECT
-            DATE_ADD(:startDate, INTERVAL dayOffset DAY) AS classDate,
-            WEEKDAY(DATE_ADD(:startDate, INTERVAL dayOffset DAY)) AS dayOfWeek,
-            ROW_NUMBER() OVER (
-                ORDER BY DATE_ADD(:startDate, INTERVAL dayOffset DAY)
-            ) AS lessonRound
-        FROM day_numbers
-        WHERE WEEKDAY(DATE_ADD(:startDate, INTERVAL dayOffset DAY)) IN (:days)
-    ) class_days
-    WHERE lessonRound <= 32
-),
-candidate_day_times AS (
+WITH candidate_day_times AS (
     SELECT
         seed.tutorId,
         tutor.tutorName,
         seed.dayOfWeek,
         seed.slotStartTime AS candidateStartTime,
-        ADDTIME(seed.slotStartTime, SEC_TO_TIME(20 * 60)) AS candidateEndTime,
+        ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60)) AS candidateEndTime,
         SUM(
             TIME_TO_SEC(
                 TIMEDIFF(
                     LEAST(
                         slot.slotEndTime,
-                        ADDTIME(seed.slotStartTime, SEC_TO_TIME(20 * 60))
+                        ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60))
                     ),
                     GREATEST(slot.slotStartTime, seed.slotStartTime)
                 )
@@ -64,13 +77,13 @@ candidate_day_times AS (
         ON slot.tutorId = seed.tutorId
         AND slot.dayOfWeek = seed.dayOfWeek
         AND slot.display = '1'
-        AND slot.slotStartTime < ADDTIME(seed.slotStartTime, SEC_TO_TIME(20 * 60))
+        AND slot.slotStartTime < ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60))
         AND slot.slotEndTime > seed.slotStartTime
     WHERE seed.display = '1'
         AND seed.dayOfWeek IN (:days)
-        AND ADDTIME(seed.slotStartTime, SEC_TO_TIME(20 * 60)) <= TIME('23:59:59')
+        AND ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60)) <= TIME('23:59:59')
     GROUP BY seed.tutorId, tutor.tutorName, seed.dayOfWeek, seed.slotStartTime
-    HAVING matchedMinutes >= 20
+    HAVING matchedMinutes >= :lessonDurationMinutes
 ),
 candidate_times AS (
     SELECT
@@ -91,11 +104,11 @@ SELECT
 FROM candidate_times ct
 WHERE NOT EXISTS (
     SELECT 1
-    FROM target_classes tc
-    JOIN TBL_CLASS_SCHEDULE cs
-        ON cs.tutorId = ct.tutorId
-        AND cs.classDate = tc.classDate
+    FROM TBL_CLASS_SCHEDULE cs
+    WHERE cs.tutorId = ct.tutorId
         AND cs.classStatus <> 9
+        AND cs.classDate BETWEEN :firstClassDate AND :lessonEndDate
+        AND cs.dayOfWeek IN (:days)
         AND cs.classStartTime < ct.candidateEndTime
         AND cs.classEndTime > ct.candidateStartTime
 )
@@ -104,8 +117,7 @@ ORDER BY ct.candidateStartTime ASC, ct.tutorId ASC;
 
 ## 작성 사유
 
-- `target_classes`에서 신청 조건에 맞는 실제 수업일 32개를 먼저 만든다.
-- `candidate_day_times`에서 강사별 주간 가능시간이 20분 수업을 감당할 수 있는지 계산한다.
-- `candidate_times`에서 선택한 모든 요일에 같은 시작시간으로 가능한 강사만 남긴다.
-- 마지막 `NOT EXISTS`에서 실제 수업일 기준으로 이미 배정된 수업과 시간이 겹치는 강사를 제외한다.
-- 따라서 화면에 표시되는 시간은 강사 가능시간과 기존 배정 현황을 모두 통과한 시간이다.
+- 수업 종료일은 파이썬에서 `build_class_dates()`로 계산한 32번째 수업일을 사용한다.
+- DB는 32개 수업일을 재귀 CTE로 다시 생성하지 않고, 이미 계산된 기간 안의 기존 수업만 조회한다.
+- `TBL_CLASS_SCHEDULE`는 실제 배정 수업 단위 테이블이므로, 강사/기간/요일/시간 겹침 조건만으로 충돌 여부를 판단할 수 있다.
+- 데이터가 많아질수록 재귀 CTE와 임시 대상 수업일 생성 비용을 줄이고, 일정 테이블의 인덱스를 활용하기 쉬운 조건으로 바뀐다.

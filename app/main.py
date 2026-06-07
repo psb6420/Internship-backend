@@ -279,28 +279,7 @@ def build_available_time_query(days: list[int], exact_start_time=False, exact_tu
         exact_clause = ' AND ' + ' AND '.join(exact_conditions)
 
     return f"""
-        WITH RECURSIVE day_numbers AS (
-            SELECT 0 AS dayOffset
-            UNION ALL
-            SELECT dayOffset + 1
-            FROM day_numbers
-            WHERE dayOffset < 370
-        ),
-        target_classes AS (
-            SELECT classDate, dayOfWeek, lessonRound
-            FROM (
-                SELECT
-                    DATE_ADD(%s, INTERVAL dayOffset DAY) AS classDate,
-                    WEEKDAY(DATE_ADD(%s, INTERVAL dayOffset DAY)) AS dayOfWeek,
-                    ROW_NUMBER() OVER (
-                        ORDER BY DATE_ADD(%s, INTERVAL dayOffset DAY)
-                    ) AS lessonRound
-                FROM day_numbers
-                WHERE WEEKDAY(DATE_ADD(%s, INTERVAL dayOffset DAY)) IN ({day_placeholders})
-            ) class_days
-            WHERE lessonRound <= %s
-        ),
-        candidate_day_times AS (
+        WITH candidate_day_times AS (
             SELECT
                 seed.tutorId,
                 tutor.tutorName,
@@ -353,11 +332,11 @@ def build_available_time_query(days: list[int], exact_start_time=False, exact_tu
         FROM candidate_times ct
         WHERE NOT EXISTS (
             SELECT 1
-            FROM target_classes tc
-            JOIN TBL_CLASS_SCHEDULE cs
-                ON cs.tutorId = ct.tutorId
-                AND cs.classDate = tc.classDate
+            FROM TBL_CLASS_SCHEDULE cs
+            WHERE cs.tutorId = ct.tutorId
                 AND cs.classStatus <> 9
+                AND cs.classDate BETWEEN %s AND %s
+                AND cs.dayOfWeek IN ({day_placeholders})
                 AND cs.classStartTime < ct.candidateEndTime
                 AND cs.classEndTime > ct.candidateStartTime
         ){exact_clause}
@@ -366,18 +345,13 @@ def build_available_time_query(days: list[int], exact_start_time=False, exact_tu
 
 
 def build_available_time_params(
-    start_date: date,
+    first_class_date: date,
+    lesson_end_date: date,
     days: list[int],
     exact_start_time: str | None = None,
     exact_tutor: str | None = None,
 ):
     params = [
-        start_date,
-        start_date,
-        start_date,
-        start_date,
-        *days,
-        FIXED_LESSON_COUNT,
         FIXED_LESSON_DURATION_MINUTES,
         FIXED_LESSON_DURATION_MINUTES,
         FIXED_LESSON_DURATION_MINUTES,
@@ -385,6 +359,9 @@ def build_available_time_params(
         FIXED_LESSON_DURATION_MINUTES,
         FIXED_LESSON_DURATION_MINUTES,
         len(days),
+        first_class_date,
+        lesson_end_date,
+        *days,
     ]
 
     if exact_start_time:
@@ -397,7 +374,8 @@ def build_available_time_params(
 
 def fetch_available_enrollment_rows(
     cursor,
-    start_date: date,
+    first_class_date: date,
+    lesson_end_date: date,
     days: list[int],
     exact_start_time: str | None = None,
     exact_tutor: str | None = None,
@@ -407,7 +385,13 @@ def fetch_available_enrollment_rows(
         exact_start_time=bool(exact_start_time),
         exact_tutor=bool(exact_tutor),
     )
-    params = build_available_time_params(start_date, days, exact_start_time, exact_tutor)
+    params = build_available_time_params(
+        first_class_date,
+        lesson_end_date,
+        days,
+        exact_start_time,
+        exact_tutor,
+    )
     cursor.execute(query, params)
     return cursor.fetchall()
 
@@ -672,7 +656,12 @@ def search_enrollment_available_times(request: EnrollmentAvailabilityRequest):
             if not cursor.fetchone():
                 raise HTTPException(status_code=400, detail='사용 가능한 과정이 아닙니다.')
 
-            rows = fetch_available_enrollment_rows(cursor, request.startDate, pattern['days'])
+            rows = fetch_available_enrollment_rows(
+                cursor,
+                class_dates[0],
+                class_dates[-1],
+                pattern['days'],
+            )
 
     return {
         'courseCode': request.courseCode,
@@ -737,7 +726,8 @@ def create_enrollment(request: EnrollmentCreateRequest):
 
             available_rows = fetch_available_enrollment_rows(
                 cursor,
-                request.startDate,
+                class_dates[0],
+                class_dates[-1],
                 pattern['days'],
                 request.startTime,
                 request.tutorId,
