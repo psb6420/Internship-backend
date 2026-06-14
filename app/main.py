@@ -188,6 +188,56 @@ def format_time(value):
     return text[:5]
 
 
+def time_text_to_minutes(value: str):
+    hour, minute = value.split(':')
+    return int(hour) * 60 + int(minute)
+
+
+def minutes_to_time_text(value: int):
+    hour, minute = divmod(value, 60)
+    return f'{hour:02d}:{minute:02d}:00'
+
+
+def build_required_segment_starts(start_time: str, duration_minutes: int):
+    start_minutes = time_text_to_minutes(start_time)
+    end_minutes = start_minutes + duration_minutes
+
+    if end_minutes >= 24 * 60:
+        raise HTTPException(status_code=400, detail='수업 종료 시간이 하루를 넘을 수 없습니다.')
+
+    return [
+        minutes_to_time_text(start_minutes + offset)
+        for offset in range(0, duration_minutes, 5)
+    ]
+
+
+def build_candidate_time_windows(candidate_start_times: list[str], duration_minutes: int):
+    windows = []
+    seen = set()
+
+    for candidate_start_time in candidate_start_times:
+        start_time = format_time(candidate_start_time)
+        if not start_time or start_time in seen:
+            continue
+
+        seen.add(start_time)
+        start_minutes = time_text_to_minutes(start_time)
+        end_minutes = start_minutes + duration_minutes
+
+        if end_minutes >= 24 * 60:
+            continue
+
+        windows.append(
+            {
+                'startTime': f'{start_time}:00',
+                'endTime': minutes_to_time_text(end_minutes),
+                'segmentStartTimes': build_required_segment_starts(start_time, duration_minutes),
+            },
+        )
+
+    return windows
+
+
 def parse_hhmm(value: str, field_name: str):
     if not re.fullmatch(r'\d{2}:\d{2}', value):
         raise HTTPException(status_code=400, detail=f'{field_name}은 HH:MM 형식으로 입력해 주세요.')
@@ -265,12 +315,39 @@ def build_enrollment_id():
     return f'ENR{timestamp}{suffix}'
 
 
-def build_available_time_query(days: list[int], exact_start_time=False, exact_tutor=False):
+def build_candidate_segment_select(candidate_time_windows: list[dict]):
+    candidate_segment_selects = []
+    candidate_segment_params = []
+
+    for window in candidate_time_windows:
+        for segment_start_time in window['segmentStartTimes']:
+            candidate_segment_selects.append(
+                """
+                SELECT
+                    TIME(%s) AS candidateStartTime,
+                    TIME(%s) AS candidateEndTime,
+                    TIME(%s) AS segmentStartTime
+                """,
+            )
+            candidate_segment_params.extend(
+                [
+                    window['startTime'],
+                    window['endTime'],
+                    segment_start_time,
+                ],
+            )
+
+    return ' UNION ALL '.join(candidate_segment_selects), candidate_segment_params
+
+
+def build_available_time_query(
+    days: list[int],
+    candidate_segment_select: str,
+    exact_tutor=False,
+):
     day_placeholders = ', '.join(['%s'] * len(days))
     exact_conditions = []
 
-    if exact_start_time:
-        exact_conditions.append('ct.candidateStartTime = %s')
     if exact_tutor:
         exact_conditions.append('ct.tutorId = %s')
 
@@ -279,39 +356,45 @@ def build_available_time_query(days: list[int], exact_start_time=False, exact_tu
         exact_clause = ' AND ' + ' AND '.join(exact_conditions)
 
     return f"""
-        WITH candidate_day_times AS (
+        WITH candidate_segments AS (
+            {candidate_segment_select}
+        ),
+        candidate_segment_counts AS (
             SELECT
-                seed.tutorId,
+                candidateStartTime,
+                candidateEndTime,
+                COUNT(DISTINCT segmentStartTime) AS requiredSegmentCount
+            FROM candidate_segments
+            GROUP BY candidateStartTime, candidateEndTime
+        ),
+        candidate_day_times AS (
+            SELECT
+                slot.tutorId,
                 tutor.tutorName,
-                seed.dayOfWeek,
-                seed.slotStartTime AS candidateStartTime,
-                ADDTIME(seed.slotStartTime, SEC_TO_TIME(%s * 60)) AS candidateEndTime,
-                SUM(
-                    TIME_TO_SEC(
-                        TIMEDIFF(
-                            LEAST(
-                                slot.slotEndTime,
-                                ADDTIME(seed.slotStartTime, SEC_TO_TIME(%s * 60))
-                            ),
-                            GREATEST(slot.slotStartTime, seed.slotStartTime)
-                        )
-                    ) / 60
-                ) AS matchedMinutes
-            FROM TBL_TUTOR_AVAILABLE_TIME seed
-            JOIN TBL_TUTOR tutor
-                ON tutor.tutorId = seed.tutorId
-                AND tutor.display = '1'
+                slot.dayOfWeek,
+                cs.candidateStartTime,
+                cs.candidateEndTime,
+                csc.requiredSegmentCount,
+                COUNT(DISTINCT slot.slotStartTime) AS matchedSegmentCount
+            FROM candidate_segments cs
+            JOIN candidate_segment_counts csc
+                ON csc.candidateStartTime = cs.candidateStartTime
+                AND csc.candidateEndTime = cs.candidateEndTime
             JOIN TBL_TUTOR_AVAILABLE_TIME slot
-                ON slot.tutorId = seed.tutorId
-                AND slot.dayOfWeek = seed.dayOfWeek
+                ON slot.slotStartTime = cs.segmentStartTime
                 AND slot.display = '1'
-                AND slot.slotStartTime < ADDTIME(seed.slotStartTime, SEC_TO_TIME(%s * 60))
-                AND slot.slotEndTime > seed.slotStartTime
-            WHERE seed.display = '1'
-                AND seed.dayOfWeek IN ({day_placeholders})
-                AND ADDTIME(seed.slotStartTime, SEC_TO_TIME(%s * 60)) <= TIME('23:59:59')
-            GROUP BY seed.tutorId, tutor.tutorName, seed.dayOfWeek, seed.slotStartTime
-            HAVING matchedMinutes >= %s
+                AND slot.dayOfWeek IN ({day_placeholders})
+            JOIN TBL_TUTOR tutor
+                ON tutor.tutorId = slot.tutorId
+                AND tutor.display = '1'
+            GROUP BY
+                slot.tutorId,
+                tutor.tutorName,
+                slot.dayOfWeek,
+                cs.candidateStartTime,
+                cs.candidateEndTime,
+                csc.requiredSegmentCount
+            HAVING matchedSegmentCount = requiredSegmentCount
         ),
         candidate_times AS (
             SELECT
@@ -348,28 +431,37 @@ def build_available_time_params(
     first_class_date: date,
     lesson_end_date: date,
     days: list[int],
-    exact_start_time: str | None = None,
+    candidate_segment_params: list[str],
     exact_tutor: str | None = None,
 ):
     params = [
-        FIXED_LESSON_DURATION_MINUTES,
-        FIXED_LESSON_DURATION_MINUTES,
-        FIXED_LESSON_DURATION_MINUTES,
+        *candidate_segment_params,
         *days,
-        FIXED_LESSON_DURATION_MINUTES,
-        FIXED_LESSON_DURATION_MINUTES,
         len(days),
         first_class_date,
         lesson_end_date,
         *days,
     ]
 
-    if exact_start_time:
-        params.append(f'{exact_start_time}:00')
     if exact_tutor:
         params.append(exact_tutor)
 
     return params
+
+
+def fetch_candidate_start_times(cursor, days: list[int]):
+    day_placeholders = ', '.join(['%s'] * len(days))
+    cursor.execute(
+        f"""
+        SELECT DISTINCT slotStartTime
+        FROM TBL_TUTOR_AVAILABLE_TIME
+        WHERE display = '1'
+            AND dayOfWeek IN ({day_placeholders})
+        ORDER BY slotStartTime ASC
+        """,
+        days,
+    )
+    return [format_time(row['slotStartTime']) for row in cursor.fetchall()]
 
 
 def fetch_available_enrollment_rows(
@@ -380,16 +472,31 @@ def fetch_available_enrollment_rows(
     exact_start_time: str | None = None,
     exact_tutor: str | None = None,
 ):
+    candidate_start_times = (
+        [exact_start_time]
+        if exact_start_time
+        else fetch_candidate_start_times(cursor, days)
+    )
+    candidate_time_windows = build_candidate_time_windows(
+        candidate_start_times,
+        FIXED_LESSON_DURATION_MINUTES,
+    )
+    if not candidate_time_windows:
+        return []
+
+    candidate_segment_select, candidate_segment_params = build_candidate_segment_select(
+        candidate_time_windows,
+    )
     query = build_available_time_query(
         days,
-        exact_start_time=bool(exact_start_time),
+        candidate_segment_select,
         exact_tutor=bool(exact_tutor),
     )
     params = build_available_time_params(
         first_class_date,
         lesson_end_date,
         days,
-        exact_start_time,
+        candidate_segment_params,
         exact_tutor,
     )
     cursor.execute(query, params)
@@ -507,35 +614,60 @@ def get_tutor_available_times(tutor_id: str):
 def search_available_tutors(request: AvailableTutorSearchRequest):
     days, start_datetime, requested_end_datetime = validate_search_request(request)
     placeholders = ', '.join(['%s'] * len(days))
+    candidate_time_windows = build_candidate_time_windows(
+        [request.startTime],
+        request.durationMinutes,
+    )
+    if not candidate_time_windows:
+        return {
+            'days': days,
+            'startTime': start_datetime.strftime('%H:%M'),
+            'requestedEndTime': requested_end_datetime.strftime('%H:%M'),
+            'durationMinutes': request.durationMinutes,
+            'availableTutors': [],
+        }
+
+    candidate_segment_select, candidate_segment_params = build_candidate_segment_select(
+        candidate_time_windows,
+    )
     query = f"""
+        WITH candidate_segments AS (
+            {candidate_segment_select}
+        ),
+        candidate_segment_counts AS (
+            SELECT
+                candidateStartTime,
+                candidateEndTime,
+                COUNT(DISTINCT segmentStartTime) AS requiredSegmentCount
+            FROM candidate_segments
+            GROUP BY candidateStartTime, candidateEndTime
+        )
         SELECT
-            tutorId,
-            tutorName,
-            dayOfWeek,
-            SUM(
-                TIME_TO_SEC(
-                    TIMEDIFF(
-                        LEAST(slotEndTime, %s),
-                        GREATEST(slotStartTime, %s)
-                    )
-                ) / 60
-            ) AS matchedMinutes
-        FROM TBL_TUTOR_AVAILABLE_TIME
-        WHERE display = '1'
-            AND dayOfWeek IN ({placeholders})
-            AND slotStartTime < %s
-            AND slotEndTime > %s
-        GROUP BY tutorId, tutorName, dayOfWeek
-        HAVING matchedMinutes >= %s
+            slot.tutorId,
+            tutor.tutorName,
+            slot.dayOfWeek
+        FROM candidate_segments cs
+        JOIN candidate_segment_counts csc
+            ON csc.candidateStartTime = cs.candidateStartTime
+            AND csc.candidateEndTime = cs.candidateEndTime
+        JOIN TBL_TUTOR_AVAILABLE_TIME slot
+            ON slot.slotStartTime = cs.segmentStartTime
+            AND slot.display = '1'
+            AND slot.dayOfWeek IN ({placeholders})
+        JOIN TBL_TUTOR tutor
+            ON tutor.tutorId = slot.tutorId
+            AND tutor.display = '1'
+        GROUP BY
+            slot.tutorId,
+            tutor.tutorName,
+            slot.dayOfWeek,
+            csc.requiredSegmentCount
+        HAVING COUNT(DISTINCT slot.slotStartTime) = csc.requiredSegmentCount
         ORDER BY tutorId ASC, dayOfWeek ASC
     """
     params = [
-        requested_end_datetime.strftime('%H:%M:%S'),
-        start_datetime.strftime('%H:%M:%S'),
+        *candidate_segment_params,
         *days,
-        requested_end_datetime.strftime('%H:%M:%S'),
-        start_datetime.strftime('%H:%M:%S'),
-        request.durationMinutes,
     ]
 
     with get_connection() as connection:

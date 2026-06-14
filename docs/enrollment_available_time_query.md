@@ -4,38 +4,56 @@
 
 수강신청 화면에서 과정, 수업시작일, 수업요일을 선택하면 해당 조건으로 32회 수업을 생성했을 때 배정 가능한 강사와 시간을 조회한다.
 
-## 2차 3주차 피드백 반영
+## 2차 4주차 피드백 반영
 
-- 가능시간 쿼리 실행 전에 서버 언어인 파이썬에서 실제 수업일 32개를 먼저 계산한다.
-- 파이썬에서 계산한 첫 수업일과 종료일을 쿼리 파라미터로 전달한다.
-- 기존 쿼리의 `WITH RECURSIVE day_numbers`, `target_classes`, `ROW_NUMBER()`를 제거했다.
-- 기존 수업 충돌 검사는 `TBL_CLASS_SCHEDULE.classDate BETWEEN :firstClassDate AND :lessonEndDate` 범위 조건으로 처리한다.
-- 선택 요일은 `cs.dayOfWeek IN (:days)`로 함께 제한해 수업 기간 안의 실제 대상 요일만 검사한다.
+- 가능시간 쿼리 전에 서버 언어인 파이썬에서 시간 계산을 먼저 처리한다.
+- 후보 수업 시작시간, 후보 수업 종료시간, 수업에 필요한 5분 단위 슬롯 시작시간을 파이썬에서 생성한다.
+- 쿼리에서는 `ADDTIME`, `SEC_TO_TIME`, `TIMEDIFF`, `TIME_TO_SEC`, `LEAST`, `GREATEST` 같은 시간 계산 함수를 사용하지 않는다.
+- 쿼리는 파이썬에서 만든 후보 시간 값을 `candidate_segments` CTE로 받아 단순 비교와 집계만 수행한다.
+- 3주차에 반영한 수업 종료일 계산 방식도 유지해 `firstClassDate`, `lessonEndDate`를 쿼리에 함께 전달한다.
 
-## 서버 종료일 계산 소스
+## 서버 시간 계산 소스
 
 ```python
-class_dates = build_class_dates(request.startDate, pattern['days'], FIXED_LESSON_COUNT)
+def build_required_segment_starts(start_time: str, duration_minutes: int):
+    start_minutes = time_text_to_minutes(start_time)
+    end_minutes = start_minutes + duration_minutes
 
-rows = fetch_available_enrollment_rows(
-    cursor,
-    class_dates[0],
-    class_dates[-1],
-    pattern['days'],
-)
+    if end_minutes >= 24 * 60:
+        raise HTTPException(status_code=400, detail='수업 종료 시간이 하루를 넘을 수 없습니다.')
+
+    return [
+        minutes_to_time_text(start_minutes + offset)
+        for offset in range(0, duration_minutes, 5)
+    ]
 ```
 
 ```python
-def build_class_dates(start_date: date, days: list[int], lesson_count: int):
-    class_dates = []
-    current_date = start_date
+def build_candidate_time_windows(candidate_start_times: list[str], duration_minutes: int):
+    windows = []
+    seen = set()
 
-    while len(class_dates) < lesson_count:
-        if current_date.weekday() in days:
-            class_dates.append(current_date)
-        current_date += timedelta(days=1)
+    for candidate_start_time in candidate_start_times:
+        start_time = format_time(candidate_start_time)
+        if not start_time or start_time in seen:
+            continue
 
-    return class_dates
+        seen.add(start_time)
+        start_minutes = time_text_to_minutes(start_time)
+        end_minutes = start_minutes + duration_minutes
+
+        if end_minutes >= 24 * 60:
+            continue
+
+        windows.append(
+            {
+                'startTime': f'{start_time}:00',
+                'endTime': minutes_to_time_text(end_minutes),
+                'segmentStartTimes': build_required_segment_starts(start_time, duration_minutes),
+            },
+        )
+
+    return windows
 ```
 
 ## 조회 기준
@@ -51,39 +69,50 @@ def build_class_dates(start_date: date, days: list[int], lesson_count: int):
 ## 핵심 쿼리
 
 ```sql
-WITH candidate_day_times AS (
+WITH candidate_segments AS (
     SELECT
-        seed.tutorId,
+        TIME(:candidateStartTime) AS candidateStartTime,
+        TIME(:candidateEndTime) AS candidateEndTime,
+        TIME(:segmentStartTime) AS segmentStartTime
+    UNION ALL
+    ...
+),
+candidate_segment_counts AS (
+    SELECT
+        candidateStartTime,
+        candidateEndTime,
+        COUNT(DISTINCT segmentStartTime) AS requiredSegmentCount
+    FROM candidate_segments
+    GROUP BY candidateStartTime, candidateEndTime
+),
+candidate_day_times AS (
+    SELECT
+        slot.tutorId,
         tutor.tutorName,
-        seed.dayOfWeek,
-        seed.slotStartTime AS candidateStartTime,
-        ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60)) AS candidateEndTime,
-        SUM(
-            TIME_TO_SEC(
-                TIMEDIFF(
-                    LEAST(
-                        slot.slotEndTime,
-                        ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60))
-                    ),
-                    GREATEST(slot.slotStartTime, seed.slotStartTime)
-                )
-            ) / 60
-        ) AS matchedMinutes
-    FROM TBL_TUTOR_AVAILABLE_TIME seed
-    JOIN TBL_TUTOR tutor
-        ON tutor.tutorId = seed.tutorId
-        AND tutor.display = '1'
+        slot.dayOfWeek,
+        cs.candidateStartTime,
+        cs.candidateEndTime,
+        csc.requiredSegmentCount,
+        COUNT(DISTINCT slot.slotStartTime) AS matchedSegmentCount
+    FROM candidate_segments cs
+    JOIN candidate_segment_counts csc
+        ON csc.candidateStartTime = cs.candidateStartTime
+        AND csc.candidateEndTime = cs.candidateEndTime
     JOIN TBL_TUTOR_AVAILABLE_TIME slot
-        ON slot.tutorId = seed.tutorId
-        AND slot.dayOfWeek = seed.dayOfWeek
+        ON slot.slotStartTime = cs.segmentStartTime
         AND slot.display = '1'
-        AND slot.slotStartTime < ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60))
-        AND slot.slotEndTime > seed.slotStartTime
-    WHERE seed.display = '1'
-        AND seed.dayOfWeek IN (:days)
-        AND ADDTIME(seed.slotStartTime, SEC_TO_TIME(:lessonDurationMinutes * 60)) <= TIME('23:59:59')
-    GROUP BY seed.tutorId, tutor.tutorName, seed.dayOfWeek, seed.slotStartTime
-    HAVING matchedMinutes >= :lessonDurationMinutes
+        AND slot.dayOfWeek IN (:days)
+    JOIN TBL_TUTOR tutor
+        ON tutor.tutorId = slot.tutorId
+        AND tutor.display = '1'
+    GROUP BY
+        slot.tutorId,
+        tutor.tutorName,
+        slot.dayOfWeek,
+        cs.candidateStartTime,
+        cs.candidateEndTime,
+        csc.requiredSegmentCount
+    HAVING matchedSegmentCount = requiredSegmentCount
 ),
 candidate_times AS (
     SELECT
@@ -118,6 +147,6 @@ ORDER BY ct.candidateStartTime ASC, ct.tutorId ASC;
 ## 작성 사유
 
 - 수업 종료일은 파이썬에서 `build_class_dates()`로 계산한 32번째 수업일을 사용한다.
-- DB는 32개 수업일을 재귀 CTE로 다시 생성하지 않고, 이미 계산된 기간 안의 기존 수업만 조회한다.
-- `TBL_CLASS_SCHEDULE`는 실제 배정 수업 단위 테이블이므로, 강사/기간/요일/시간 겹침 조건만으로 충돌 여부를 판단할 수 있다.
-- 데이터가 많아질수록 재귀 CTE와 임시 대상 수업일 생성 비용을 줄이고, 일정 테이블의 인덱스를 활용하기 쉬운 조건으로 바뀐다.
+- 수업 종료시간과 필요한 5분 단위 슬롯은 파이썬에서 미리 계산한다.
+- DB는 시간 더하기와 시간 차이 계산을 수행하지 않고, 전달받은 시간 값이 가능시간 테이블에 존재하는지만 확인한다.
+- 데이터가 많아질수록 행마다 시간 함수를 계산하는 비용을 줄이고, `slotStartTime`, `dayOfWeek`, `classDate` 같은 저장된 컬럼 비교 중심으로 조회할 수 있다.
